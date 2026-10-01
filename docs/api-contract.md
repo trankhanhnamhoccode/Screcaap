@@ -7,7 +7,7 @@ This document fixes resource behavior and known semantics. **DECIDED** means agr
 - **DECIDED:** Endpoints are resource oriented and versioned under `/v1`. The API does not expose OCR provider, analyzer, Redis/RQ, or object-storage operations.
 - **DECIDED:** A capture is one observation at `captured_at`. Its state is `pending`, `processing`, `completed`, or `failed`; only the transitions in [the state-machine ADR](adr/0006-capture-processing-state-machine.md) are valid.
 - **DECIDED:** A successful upload returns `202 Accepted` only after capture metadata/image are persisted and a processing job is enqueued. It does not wait for OCR, analysis, or timeline aggregation.
-- **PROPOSED:** If capture collections are exposed, order by `captured_at DESC, id DESC` and use keyset/cursor pagination. Strategy and wire format remain **TODO** decisions.
+- **DECIDED:** If capture collections are exposed, use cursor/keyset pagination ordered by `captured_at DESC, id DESC`, with `id` as the stable tie-breaker. Cursor encoding/wire format remains **TODO**.
 - **TODO:** Authentication mechanism, principal/device enrollment, authorization responses, identifier format, timestamp serialization, error body schema, upload limits and allowed media types, client idempotency key, and rate limits. Access to a user's screenshots and derived data must be owner scoped. Until authentication is decided, no endpoint should be treated as safe for public deployment.
 
 The response examples show only decided semantic members. Their field spelling and envelope remain **TODO** unless explicitly stated below.

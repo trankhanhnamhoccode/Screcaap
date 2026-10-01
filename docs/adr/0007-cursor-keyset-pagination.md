@@ -1,14 +1,14 @@
-# Proposal 0007: Cursor/keyset pagination
+# ADR 0007: Cursor/keyset pagination
 
-**Status: proposed; not an agreed MVP decision.**
+**Status: decided for capture collections; timeline pagination remains proposed.**
 
 ## Context
 
 Capture and timeline collections can grow as screenshots arrive. Offset pagination can shift under concurrent inserts and become expensive.
 
-## Proposed decision
+## Decision
 
-Use cursor/keyset pagination for capture and timeline collection endpoints where appropriate. Order captures by `captured_at DESC, id DESC`; a capture cursor carries enough information to resume from both values. Keep cursors opaque at the public API boundary.
+Use cursor/keyset pagination for capture collection endpoints. Order captures by `captured_at DESC, id DESC`, with `id` as the stable tie-breaker; a capture cursor carries enough information to resume from both values. Keep cursors opaque at the public API boundary; cursor encoding/wire format remains TODO. Cursor/keyset pagination for timeline collections remains proposed.
 
 ## Consequences
 

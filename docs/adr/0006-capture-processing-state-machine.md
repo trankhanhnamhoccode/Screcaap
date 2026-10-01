@@ -6,7 +6,7 @@ Clients need to observe asynchronous progress, and workers may receive a job mor
 
 ## Decision
 
-Use `pending`, `processing`, `completed`, and `failed`. The specified transitions are `pending -> processing` and `processing -> completed`. Entry into `failed` and retry transitions are unresolved. Treat persisted state as authoritative.
+Use `pending`, `processing`, `completed`, and `failed`. The transitions are `pending -> processing`, `processing -> completed`, `processing -> failed`, and `failed -> pending` only through explicit retry. There is no implicit `completed -> processing` transition. Treat persisted state as authoritative.
 
 ## Consequences
 
