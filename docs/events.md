@@ -9,8 +9,8 @@
 | `capture.ocr.completed` | OCR output has been persisted for a capture. | Processing service; input to semantic analysis. |
 | `capture.analysis.completed` | Semantic analysis has been persisted for a capture. | Processing service; input to timeline aggregation. |
 | `capture.processing.completed` | Required processing has finished and state becomes `completed`. | Processing service; client-visible state. |
-| `capture.processing.failed` | A processing attempt fails; how state becomes `failed` is TODO. | Processing service; failure reporting and recovery policy are TODO. |
+| `capture.processing.failed` | A processing attempt fails and state changes from `processing` to `failed`. | Processing service; failure reporting and recovery policy are TODO. |
 
-**DECIDED:** Do not include screenshot bytes, raw OCR text, or sensitive provider payloads in job/event payloads; pass a capture reference and load authoritative data through application abstractions. Retry transitions and job delivery assumptions are **TODO**.
+**DECIDED:** Do not include screenshot bytes, raw OCR text, or sensitive provider payloads in job/event payloads; pass a capture reference and load authoritative data through application abstractions. Retry changes `failed` to `pending` only when explicitly requested. Background processing assumes at-least-once delivery, so duplicate jobs are possible and processing jobs must be idempotent. Exact duplicate-job handling and queue-specific delivery/recovery details remain **TODO**.
 
 **TODO:** Define whether these facts need persisted event records, their exact envelope, failure categorization, retry trigger/API, backoff, and publication consistency with PostgreSQL/object storage. No external event contract is established here.

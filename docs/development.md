@@ -49,7 +49,7 @@ docker compose ps
 python -m pytest
 ```
 
-`GET /health` checks only that the API responds; it does not query dependencies. `alembic upgrade head` connects to PostgreSQL but creates no product tables because there are no schema revisions yet. `python -m server.storage.bootstrap` checks MinIO access. The worker connects to Redis on startup. For direct checks, run:
+`GET /health` checks only that the API responds; it does not query dependencies. `alembic upgrade head` creates the first users, devices, and captures tables. `python -m server.storage.bootstrap` checks MinIO access. The worker connects to Redis on startup. For direct checks, run:
 
 ```powershell
 python -c "from sqlalchemy import text; from server.database.session import get_engine; print(get_engine().connect().execute(text('select 1')).scalar())"

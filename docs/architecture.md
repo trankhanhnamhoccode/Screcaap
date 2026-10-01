@@ -47,9 +47,11 @@ The composition boundary wires concrete adapters to ports. `shared/schemas/` con
 
 ## Processing reliability
 
-**DECIDED:** Capture states are `pending`, `processing`, `completed`, and `failed`. The specified transitions are `pending -> processing` and `processing -> completed`. Entry into `failed` and retry transitions remain **TODO**. See [the state-machine ADR](adr/0006-capture-processing-state-machine.md).
+**DECIDED:** Capture states are `pending`, `processing`, `completed`, and `failed`. The transitions are `pending -> processing`, `processing -> completed`, `processing -> failed`, and `failed -> pending` only through explicit retry. There is no implicit `completed -> processing` transition. See [the state-machine ADR](adr/0006-capture-processing-state-machine.md).
 
-**TODO:** Define delivery assumptions, duplicate handling, idempotency, and recovery before implementing RQ jobs. Persisted state is authoritative, not queue delivery count.
+**DECIDED:** Background processing assumes at-least-once delivery, so duplicate jobs are possible and processing jobs must be idempotent. Persisted state is authoritative, not queue delivery count.
+
+**TODO:** Define exact duplicate-job handling, atomic claiming/concurrency, retry/backoff, failure recovery, and queue-specific delivery/recovery details before implementing RQ jobs.
 
 **DECIDED:** Timeline segments are inferred from multiple observations. A screenshot does not establish activity through the next screenshot timestamp. The aggregation algorithm, gap threshold, and treatment of low-confidence observations are **TODO**; [Proposal 0008](adr/0008-rule-based-timeline-aggregation.md) is one option.
 

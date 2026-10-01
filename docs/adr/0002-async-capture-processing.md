@@ -10,4 +10,4 @@ OCR and LLM latency vary, and external providers may fail. Upload response time 
 
 ## Consequences
 
-The API can respond promptly, and clients observe work through capture state. Redis + RQ is selected in ADR 0004. The specified transitions are in ADR 0006. Intake consistency, delivery assumptions, failure transitions, and retry/backoff policy remain TODO.
+The API can respond promptly, and clients observe work through capture state. Redis + RQ is selected in ADR 0004. The decided transitions are in ADR 0006. Background processing assumes at-least-once delivery, so duplicate jobs are possible and processing jobs must be idempotent. Intake consistency, exact duplicate-job handling, atomic claiming/concurrency, failure recovery, retry/backoff policy, and queue-specific delivery/recovery details remain TODO.

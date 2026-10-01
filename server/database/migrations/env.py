@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, pool
 
+import server.database.models  # noqa: F401  Register mappings before reading metadata.
 from server.config import get_settings
 from server.database.session import Base
 
