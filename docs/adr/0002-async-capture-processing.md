@@ -10,4 +10,4 @@ OCR and LLM latency vary, and external providers may fail. Upload response time 
 
 ## Consequences
 
-The API can respond promptly, and processing can retry independently. Clients need a way to observe pending, completed, and failed work. Scheduling technology, consistency guarantees, and retry policy remain TODO decisions.
+The API can respond promptly, and clients observe work through capture state. Redis + RQ is selected in ADR 0004. The specified transitions are in ADR 0006. Intake consistency, delivery assumptions, failure transitions, and retry/backoff policy remain TODO.

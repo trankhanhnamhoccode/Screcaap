@@ -1,7 +1,7 @@
 # Screcaap
 
-Screcaap is a student project for understanding laptop activity from periodic screenshots. The desktop client is expected to capture about every 30 seconds by default. The backend is being organized as a modular monolith; product processing is not implemented yet.
+Screcaap is a student project for understanding laptop activity from periodic screenshots. The backend MVP is designed as a Python modular monolith with a FastAPI API and an RQ background worker in the same codebase. Processing and runtime setup are not implemented yet.
 
-Start with [the product scope](docs/product.md), [architecture](docs/architecture.md), and [development conventions](docs/development.md). Draft API and data concepts live in [docs/api-contract.md](docs/api-contract.md) and [docs/database.md](docs/database.md).
+Start with the [product scope](docs/product.md), [architecture](docs/architecture.md), and [development conventions](docs/development.md). The [API contract](docs/api-contract.md), [conceptual data model](docs/database.md), [internal events](docs/events.md), and [ADRs](docs/adr/README.md) record decided behavior and remaining open decisions.
 
-Backend startup and installation commands are TODO while the runtime framework and dependencies are selected. See [docs/development.md](docs/development.md).
+Backend startup and installation commands will be added when the selected dependencies and services are configured. See [development conventions](docs/development.md).
