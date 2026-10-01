@@ -1,4 +1,11 @@
-"""Backend application entry point placeholder.
+"""FastAPI application bootstrap."""
 
-No HTTP framework or executable server is configured yet.
-"""
+from fastapi import FastAPI
+
+app = FastAPI(title="Screcaap")
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Report that the API process is responding."""
+    return {"status": "ok"}
