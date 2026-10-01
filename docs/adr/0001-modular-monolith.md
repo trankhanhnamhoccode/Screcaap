@@ -1,13 +1,13 @@
-# ADR 0001: Modular monolith for the MVP
+# ADR 0001: Modular monolith and background worker
 
 ## Context
 
-Screcaap is a student project with a very small team. Local development, debugging, and learning matter more than distributed scaling. Clear module boundaries are still useful if a worker or integration needs extraction later.
+Screcaap is a small student project. Capture upload must return promptly while OCR and analysis can take longer or fail. Clear boundaries are needed without a distributed service architecture.
 
 ## Decision
 
-Build the MVP as a modular monolith rather than microservices. Keep API, services, domain, repositories, and provider adapters separate inside one backend.
+Build the MVP as a modular monolith with an API process and background worker in the same codebase. Organize code into API/Transport, Application/Services, Domain, and Infrastructure. API routes call services; the worker invokes application processing use cases. Domain code depends on no web framework, ORM, queue, storage SDK, OCR implementation, or LLM provider.
 
 ## Consequences
 
-Development and debugging are simpler, and deployment can remain small. The team must enforce dependency boundaries in code review. Extraction remains possible if demonstrated needs justify it, but it is not a current goal.
+Development and debugging remain straightforward, while slow work runs outside the HTTP request. The team must enforce dependency boundaries and operate an API and worker process. There is no separate backend service boundary.
