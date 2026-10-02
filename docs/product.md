@@ -17,4 +17,4 @@ The desktop client periodically captures screenshots (about every 30 seconds by 
 
 ## Scope boundary
 
-The current repository is scaffolding. The first domain types and users/devices/captures schema are implemented; capture intake, OCR, analysis, timeline inference, and repositories are not implemented. This documentation fixes backend architecture and technology choices while detailed API fields, remaining database schema, failure policy, and product controls remain TODO.
+The current repository is scaffolding. The first domain types, users/devices/captures schema, and basic add/get-by-id repositories are implemented; capture intake, OCR, analysis, and timeline inference are not implemented. This documentation fixes backend architecture and technology choices while detailed API fields, remaining database schema, failure policy, and product controls remain TODO.
