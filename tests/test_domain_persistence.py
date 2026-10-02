@@ -1,4 +1,4 @@
-"""PostgreSQL integration checks for the first domain persistence migration."""
+"""PostgreSQL integration checks for the first migration and repositories."""
 
 from datetime import datetime, timezone
 from importlib import import_module
@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 
 from server.config import get_settings
 from server.database.models import CaptureModel, DeviceModel, UserModel
+from server.database.repositories.capture import SqlAlchemyCaptureRepository
+from server.database.repositories.device import SqlAlchemyDeviceRepository
+from server.database.repositories.user import SqlAlchemyUserRepository
 from server.database.session import Base
 from server.domain.entities import Capture, Device, User
 from server.domain.enums import ProcessingStatus
@@ -199,3 +202,103 @@ def test_domain_timestamps_must_be_timezone_aware() -> None:
             id=uuid4(), device_id=device_id, captured_at=datetime.now(),
             processing_status=ProcessingStatus.PENDING, created_at=aware, updated_at=aware,
         )
+
+
+def test_user_repository_round_trip(database_session: Session) -> None:
+    user = User(id=uuid4(), created_at=datetime.now(timezone.utc))
+    repository = SqlAlchemyUserRepository(database_session)
+
+    repository.add(user)
+    database_session.commit()
+    database_session.expunge_all()
+
+    stored = repository.get_by_id(user.id)
+    assert type(stored) is User
+    assert stored == user
+
+
+def test_device_repository_round_trip(database_session: Session) -> None:
+    user = User(id=uuid4(), created_at=datetime.now(timezone.utc))
+    SqlAlchemyUserRepository(database_session).add(user)
+    database_session.commit()
+    device = Device(
+        id=uuid4(), user_id=user.id, name="Laptop", created_at=datetime.now(timezone.utc)
+    )
+    repository = SqlAlchemyDeviceRepository(database_session)
+
+    repository.add(device)
+    database_session.commit()
+    database_session.expunge_all()
+
+    stored = repository.get_by_id(device.id)
+    assert type(stored) is Device
+    assert stored == device
+
+
+@pytest.mark.parametrize(
+    "image_reference, status",
+    [(None, ProcessingStatus.PENDING), ("captures/example.png", ProcessingStatus.COMPLETED)],
+)
+def test_capture_repository_round_trip(
+    database_session: Session, image_reference: str | None, status: ProcessingStatus
+) -> None:
+    user = User(id=uuid4(), created_at=datetime.now(timezone.utc))
+    device = Device(id=uuid4(), user_id=user.id, name=None, created_at=datetime.now(timezone.utc))
+    SqlAlchemyUserRepository(database_session).add(user)
+    SqlAlchemyDeviceRepository(database_session).add(device)
+    database_session.commit()
+    capture = Capture(
+        id=uuid4(), device_id=device.id,
+        captured_at=datetime(2026, 10, 1, 8, 30, tzinfo=timezone.utc),
+        processing_status=status,
+        created_at=datetime(2026, 10, 1, 8, 31, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 10, 1, 8, 32, tzinfo=timezone.utc),
+        image_reference=image_reference,
+    )
+    repository = SqlAlchemyCaptureRepository(database_session)
+
+    repository.add(capture)
+    database_session.commit()
+    database_session.expunge_all()
+
+    model = database_session.get(CaptureModel, capture.id)
+    assert model is not None
+    assert model.image_object_key == image_reference
+    assert model.processing_status == status.value
+    database_session.expunge_all()
+
+    stored = repository.get_by_id(capture.id)
+    assert type(stored) is Capture
+    assert stored == capture
+    assert stored.processing_status is status
+
+
+def test_repositories_return_none_for_unknown_ids(database_session: Session) -> None:
+    missing_id = uuid4()
+    assert SqlAlchemyUserRepository(database_session).get_by_id(missing_id) is None
+    assert SqlAlchemyDeviceRepository(database_session).get_by_id(missing_id) is None
+    assert SqlAlchemyCaptureRepository(database_session).get_by_id(missing_id) is None
+
+
+def test_repositories_leave_transaction_control_to_caller(database_session: Session) -> None:
+    now = datetime.now(timezone.utc)
+    user = User(id=uuid4(), created_at=now)
+    device = Device(id=uuid4(), user_id=user.id, name="Laptop", created_at=now)
+    capture = Capture(
+        id=uuid4(), device_id=device.id, captured_at=now,
+        processing_status=ProcessingStatus.PENDING, created_at=now, updated_at=now,
+        image_reference="captures/rollback.png",
+    )
+    user_repository = SqlAlchemyUserRepository(database_session)
+    device_repository = SqlAlchemyDeviceRepository(database_session)
+    capture_repository = SqlAlchemyCaptureRepository(database_session)
+
+    user_repository.add(user)
+    device_repository.add(device)
+    capture_repository.add(capture)
+    database_session.flush()
+    database_session.rollback()
+
+    assert user_repository.get_by_id(user.id) is None
+    assert device_repository.get_by_id(device.id) is None
+    assert capture_repository.get_by_id(capture.id) is None
