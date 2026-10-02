@@ -20,6 +20,7 @@ from server.database.repositories.user import SqlAlchemyUserRepository
 from server.database.session import Base
 from server.domain.entities import Capture, Device, User
 from server.domain.enums import ProcessingStatus
+from server.services.capture_worker_service import CaptureWorkerService
 
 
 @pytest.fixture
@@ -302,3 +303,54 @@ def test_repositories_leave_transaction_control_to_caller(database_session: Sess
     assert user_repository.get_by_id(user.id) is None
     assert device_repository.get_by_id(device.id) is None
     assert capture_repository.get_by_id(capture.id) is None
+
+
+def test_capture_worker_state_transitions_are_conditional(database_session: Session) -> None:
+    _, device = create_user_and_device(database_session)
+    capture = CaptureModel(device_id=device.id, captured_at=datetime.now(timezone.utc))
+    database_session.add(capture)
+    database_session.commit()
+    repository = SqlAlchemyCaptureRepository(database_session)
+
+    assert repository.claim_for_processing(capture.id) is True
+    database_session.commit()
+    assert repository.claim_for_processing(capture.id) is False
+    assert repository.fail_processing(capture.id) is True
+    database_session.commit()
+    assert repository.complete_processing(capture.id) is False
+    assert repository.claim_for_processing(capture.id) is False
+    assert repository.get_by_id(capture.id).processing_status is ProcessingStatus.FAILED
+
+
+def test_worker_service_with_real_repository_commits_before_processing(
+    database_session: Session,
+) -> None:
+    _, device = create_user_and_device(database_session)
+    capture = CaptureModel(device_id=device.id, captured_at=datetime.now(timezone.utc))
+    database_session.add(capture)
+    database_session.commit()
+    repository = SqlAlchemyCaptureRepository(database_session)
+    observer_engine = create_engine(get_settings().database_url)
+    schema = database_session.info["test_schema"]
+
+    class CheckingProcessor:
+        calls = 0
+
+        def process(self, capture_id):
+            self.calls += 1
+            assert capture_id == capture.id
+            with observer_engine.connect() as connection:
+                connection.execute(text(f"SET search_path TO {schema}, public"))
+                state = connection.execute(
+                    text("SELECT processing_status FROM captures WHERE id = :id"),
+                    {"id": capture_id},
+                ).scalar_one()
+                assert state == ProcessingStatus.PROCESSING
+
+    processor = CheckingProcessor()
+    service = CaptureWorkerService(repository, processor, database_session)
+    service.process_capture(capture.id)
+
+    assert processor.calls == 1
+    assert repository.get_by_id(capture.id).processing_status is ProcessingStatus.COMPLETED
+    observer_engine.dispose()
