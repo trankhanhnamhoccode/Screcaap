@@ -55,7 +55,9 @@ The composition boundary wires concrete adapters to ports. `shared/schemas/` con
 
 **DECIDED:** Background processing assumes at-least-once delivery, so duplicate jobs are possible and processing jobs must be idempotent. Persisted state is authoritative, not queue delivery count.
 
-**TODO:** Define exact duplicate-job handling, atomic claiming/concurrency, retry/backoff, failure recovery, and queue-specific delivery/recovery details before implementing RQ jobs.
+**IMPLEMENTED worker orchestration foundation:** A worker service receives a Capture ID, atomically claims `pending -> processing`, and commits that claim before invoking the opaque `CaptureProcessor` port. The processor runs outside a database transaction. On success, the service commits `processing -> completed`; on a processing exception, it commits `processing -> failed` and surfaces the original error. A losing claim checks persisted state: `processing`, `completed`, and `failed` jobs skip processing; missing captures raise an error. Failed captures are not automatically retried. RQ delivery remains at least once, and the queue adapter still accepts an importable job target. No production target is wired until a real processor exists.
+
+**TODO:** Implement the production processing pipeline, `OCRProvider`, `ActivityAnalyzer`, and result persistence. Define RQ retry/backoff, stale `processing` recovery, explicit `failed -> pending` retry, completion persistence failure recovery, and queue-specific delivery/recovery details. No automatic recovery is implied by the current worker service.
 
 **DECIDED:** Timeline segments are inferred from multiple observations. A screenshot does not establish activity through the next screenshot timestamp. The aggregation algorithm, gap threshold, and treatment of low-confidence observations are **TODO**; [Proposal 0008](adr/0008-rule-based-timeline-aggregation.md) is one option.
 

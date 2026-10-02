@@ -1,7 +1,13 @@
-"""Small application ports for capture intake."""
+"""Small application ports for capture intake and processing."""
 
 from typing import Protocol
 from uuid import UUID
+
+
+class CaptureProcessor(Protocol):
+    """Perform opaque processing for a capture after its claim is committed."""
+
+    def process(self, capture_id: UUID) -> None: ...
 
 
 class ImageStorage(Protocol):
