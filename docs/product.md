@@ -17,4 +17,4 @@ The desktop client periodically captures screenshots (about every 30 seconds by 
 
 ## Scope boundary
 
-The current repository is scaffolding. The first domain types, users/devices/captures schema, basic add/get-by-id repositories, capture intake application service, MinIO image adapter, and RQ queue adapter are implemented; HTTP intake, production capture processing, OCR, analysis, and timeline inference are not implemented. This documentation fixes backend architecture and technology choices while detailed API fields, remaining database schema, failure policy, and product controls remain TODO.
+The current repository is scaffolding. The first domain types, users/devices/captures schema, basic add/get-by-id repositories, capture intake application service, MinIO image adapter, RQ queue adapter, and HTTP intake route are implemented. Production HTTP intake remains unavailable until a real processing job target exists; production capture processing, OCR, analysis, and timeline inference are not implemented. This documentation fixes backend architecture and technology choices while remaining database schema, failure policy, and product controls remain TODO.

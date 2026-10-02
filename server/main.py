@@ -2,7 +2,10 @@
 
 from fastapi import FastAPI
 
+from server.api.routes.captures import router as captures_router
+
 app = FastAPI(title="Screcaap")
+app.include_router(captures_router)
 
 
 @app.get("/health")

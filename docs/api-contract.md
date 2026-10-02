@@ -8,33 +8,36 @@ This document fixes resource behavior and known semantics. **DECIDED** means agr
 - **DECIDED:** A capture is one observation at `captured_at`. Its state is `pending`, `processing`, `completed`, or `failed`; only the transitions in [the state-machine ADR](adr/0006-capture-processing-state-machine.md) are valid.
 - **DECIDED:** A successful upload returns `202 Accepted` only after capture metadata/image are persisted and a processing job is enqueued. It does not wait for OCR, analysis, or timeline aggregation.
 - **DECIDED:** If capture collections are exposed, use cursor/keyset pagination ordered by `captured_at DESC, id DESC`, with `id` as the stable tie-breaker. Cursor encoding/wire format remains **TODO**.
-- **TODO:** Authentication mechanism, principal/device enrollment, authorization responses, identifier format, timestamp serialization, error body schema, upload limits and allowed media types, client idempotency key, and rate limits. Access to a user's screenshots and derived data must be owner scoped. Until authentication is decided, no endpoint should be treated as safe for public deployment.
+- **TODO:** Authentication mechanism, principal/device enrollment, authorization responses, upload limits and allowed media types, client idempotency key, and rate limits. Identifier, timestamp, and error formats for endpoints other than POST intake remain undecided. Access to a user's screenshots and derived data must be owner scoped. Until authentication is decided, no endpoint should be treated as safe for public deployment.
 
-The response examples show only decided semantic members. Their field spelling and envelope remain **TODO** unless explicitly stated below.
+The POST intake fields and known error bodies are specified below. Examples for other endpoints remain illustrative.
 
 ## `POST /v1/captures`
 
 **Purpose:** Accept one timestamped screenshot observation for asynchronous processing.
 
 - **Authentication:** **TODO** mechanism; only the owning user/device may upload.
-- **Request:** Screenshot bytes and observation metadata including capture time and device association. **TODO:** multipart versus another upload format, field names, identifier format, timezone wire format, content types, size limit, and optional client deduplication token.
-- **Validation:** Require a usable image, capture timestamp, and device association; enforce ownership and eventual size/type limits. Exact validation ranges and error shape are **TODO**.
-- **Response:** `202 Accepted` with a way to identify the capture and its initial `pending` state. Exact JSON field names and `Location` header policy are **TODO**.
-- **Errors:** Validation failure (`400` or `422`: **TODO** mapping); unauthenticated/forbidden (`401`/`403`: **TODO** policy); upload too large (`413` if a limit is set); persistence/storage/enqueue failure (`5xx`, exact mapping **TODO**). The API must not report acceptance if the job was not successfully requested.
-- **Asynchronous semantics:** The client polls `GET /v1/captures/{capture_id}` for state. A `202` does not promise that OCR or timeline data already exists. Intake idempotency and recovery from partial persistence are **TODO**.
+- **Request:** `multipart/form-data` with required `device_id` (UUID), `captured_at` (timezone-aware ISO-8601 timestamp), and `image` (file). Screenshot bytes are not sent as JSON.
+- **Validation:** FastAPI rejects malformed or missing fields with `422`; a timestamp without an offset is rejected. Empty image files return `422` with `empty_image`. The API does not decode the image. **TODO:** Upload-size limit and exact MIME allowlist; authentication and owner verification.
+- **Response:** `202 Accepted` with JSON fields `id`, `device_id`, `captured_at`, `processing_status`, `created_at`, and `updated_at`. State comes from the persisted application result, normally `pending`. The response does not expose an image reference, storage details, or a queue job ID. `Location` header policy remains **TODO**.
+- **Errors:** Unknown device: `404` with `device_not_found`. Enqueue failure after commit: `503` with `capture_enqueue_failed` and the committed `capture_id`. Storage or persistence failure: generic `500` without provider details. If production processing is not configured, the default dependency returns `503` with `capture_processing_unavailable` before intake.
+- **Known application error body:** `{"error":{"code":"capture_enqueue_failed","message":"Capture was stored but background processing could not be scheduled.","capture_id":"<UUID>"}}`. Missing-device and empty-image errors use the same `error` object without `capture_id`. FastAPI field validation retains its standard `detail` body; the pre-intake configuration `503` currently uses `{"detail":{"code":"capture_processing_unavailable"}}`.
+- **Asynchronous semantics:** `202` means the Capture was accepted for asynchronous processing and a job was requested; OCR and semantic analysis have not completed. Enqueue failure leaves the image and pending Capture stored. Blind retry may create another Capture because upload idempotency and recovery are **TODO**. The future `GET /v1/captures/{capture_id}` will expose state.
 
-Illustrative exchange, with wire names and body encoding still **TODO**:
+Example exchange:
 
 ```http
 POST /v1/captures
-Content-Type: <upload media type TODO>
+Content-Type: multipart/form-data; boundary=...
 
-<image bytes and captured_at/device metadata; encoding TODO>
+device_id=<UUID>
+captured_at=2026-10-03T01:23:45+07:00
+image=<uploaded file>
 
 HTTP/1.1 202 Accepted
 Content-Type: application/json
 
-{"<capture identifier field TODO>": "<id>", "<state field TODO>": "pending"}
+{"id":"<UUID>","device_id":"<UUID>","captured_at":"2026-10-03T01:23:45+07:00","processing_status":"pending","created_at":"2026-10-02T18:23:46Z","updated_at":"2026-10-02T18:23:46Z"}
 ```
 
 ## `GET /v1/captures/{capture_id}`

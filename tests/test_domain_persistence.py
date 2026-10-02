@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from importlib import import_module
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic.operations import Operations
@@ -354,3 +354,55 @@ def test_worker_service_with_real_repository_commits_before_processing(
     assert processor.calls == 1
     assert repository.get_by_id(capture.id).processing_status is ProcessingStatus.COMPLETED
     observer_engine.dispose()
+
+
+def test_http_intake_with_real_service_and_repositories(database_session: Session) -> None:
+    from fastapi.testclient import TestClient
+
+    from server.api.dependencies import get_image_storage, get_processing_queue, get_session
+    from server.main import app
+
+    _, device = create_user_and_device(database_session)
+    database_session.commit()
+
+    class FakeStorage:
+        stored: list[bytes] = []
+
+        def store(self, image_bytes: bytes) -> str:
+            self.stored.append(image_bytes)
+            return "captures/integration-image"
+
+        def remove(self, image_reference: str) -> None:
+            raise AssertionError("No cleanup expected")
+
+    class FakeQueue:
+        enqueued: list = []
+
+        def enqueue_capture_processing(self, capture_id) -> None:
+            self.enqueued.append(capture_id)
+
+    storage, queue = FakeStorage(), FakeQueue()
+    app.dependency_overrides[get_session] = lambda: database_session
+    app.dependency_overrides[get_image_storage] = lambda: storage
+    app.dependency_overrides[get_processing_queue] = lambda: queue
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/captures",
+                data={
+                    "device_id": str(device.id),
+                    "captured_at": "2026-10-03T01:23:45+07:00",
+                },
+                files={"image": ("screen.png", b"image bytes", "image/png")},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 202
+    capture_id = UUID(response.json()["id"])
+    stored = database_session.get(CaptureModel, capture_id)
+    assert stored is not None
+    assert stored.processing_status == ProcessingStatus.PENDING
+    assert stored.image_object_key == "captures/integration-image"
+    assert storage.stored == [b"image bytes"]
+    assert queue.enqueued == [capture_id]
