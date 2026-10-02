@@ -23,9 +23,13 @@
 
 **DECIDED upload flow:** `Desktop Client -> POST /v1/captures -> persist metadata/image -> enqueue job -> 202 Accepted`. The response must not wait for OCR or analysis. The service coordinates persistence and enqueueing; the API route performs no storage or queue work itself.
 
+**IMPLEMENTED application intake flow:** `CaptureIntakeCommand(device_id, captured_at, image_bytes) -> look up Device -> ImageStorage.store -> add pending Capture -> commit -> ProcessingQueue.enqueue_capture_processing(capture_id) -> Capture`. The application owns commit/rollback through the caller-provided SQLAlchemy Session's transaction methods; repositories never commit. `ImageStorage` and `ProcessingQueue` are application ports, without storage or queue SDK types. MinIO implements the image port using opaque object keys; HTTP wiring and a concrete queue adapter are not implemented yet.
+
+If the device is missing, no image, capture, or job is created. Storage failure prevents capture persistence and enqueueing. A repository/add or commit failure triggers rollback and best-effort image removal while preserving the original error. Enqueue failure happens after commit: the pending Capture and image remain, and the service raises an error containing the committed capture ID. **TODO:** Recover pending captures whose enqueue failed; this MVP has no outbox, retry, or reconciliation mechanism.
+
 **DECIDED worker flow:** `job -> Capture -> OCRProvider -> ActivityAnalyzer -> persist results -> timeline aggregation`. The worker invokes application services. OCR output is distinct from semantic analysis. An `ActivitySegment` represents an interval inferred from observations; a `Capture` represents only one timestamp.
 
-**TODO:** Define the consistency mechanism between PostgreSQL, object storage, and job enqueueing, including recovery from partial intake and enqueue failure. No distributed transaction is assumed.
+**TODO:** Define a durable consistency/recovery mechanism between PostgreSQL, object storage, and job enqueueing. Best-effort image cleanup cannot guarantee orphan removal, and enqueue-after-commit does not guarantee that a pending capture has a queued job. No distributed transaction is assumed.
 
 ## Layers and dependency direction
 

@@ -4,7 +4,7 @@
 
 Install Python 3.11 or newer and Docker Desktop (or Docker Engine with the Compose plugin). PostgreSQL, Redis, and MinIO run in Docker; do not install those services separately on the host. Run the commands below from the repository root. The API and RQ worker run in a host Python virtual environment.
 
-This is infrastructure bootstrap only. Capture ingestion, OCR, analysis, and timeline routes are not implemented.
+This is infrastructure bootstrap plus an unwired capture intake application service and a concrete MinIO image adapter. HTTP capture ingestion, a concrete queue adapter, OCR, analysis, and timeline routes are not implemented. See [MinIO adapter testing](minio-testing.md) for real storage tests and a temporary-image smoke test.
 
 ## Start on Windows PowerShell
 
