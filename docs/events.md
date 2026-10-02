@@ -13,4 +13,6 @@
 
 **DECIDED:** Do not include screenshot bytes, raw OCR text, or sensitive provider payloads in job/event payloads; pass a capture reference and load authoritative data through application abstractions. Retry changes `failed` to `pending` only when explicitly requested. Background processing assumes at-least-once delivery, so duplicate jobs are possible and processing jobs must be idempotent. Exact duplicate-job handling and queue-specific delivery/recovery details remain **TODO**.
 
+**IMPLEMENTED queue handoff:** `RqProcessingQueue` produces a job on `capture-processing` with one positional `capture_id` UUID string. The future capture-processing worker is the consumer and will parse that string back into the project ID type. The job target is injected by infrastructure composition; no production consumer is implemented yet.
+
 **TODO:** Define whether these facts need persisted event records, their exact envelope, failure categorization, retry trigger/API, backoff, and publication consistency with PostgreSQL/object storage. No external event contract is established here.
