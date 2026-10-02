@@ -40,6 +40,7 @@ class Capture:
     processing_status: ProcessingStatus
     created_at: datetime
     updated_at: datetime
+    image_reference: str | None = None
 
     def __post_init__(self) -> None:
         _require_aware(self.captured_at, "captured_at")
