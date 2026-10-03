@@ -4,7 +4,7 @@
 
 Install Python 3.11 or newer and Docker Desktop (or Docker Engine with the Compose plugin). PostgreSQL, Redis, and MinIO run in Docker; do not install those services separately on the host. Run the commands below from the repository root. The API and RQ worker run in a host Python virtual environment.
 
-This is infrastructure bootstrap only. Capture ingestion, OCR, analysis, and timeline routes are not implemented.
+This includes `POST /v1/captures`, `GET /v1/captures/{capture_id}`, and `GET /v1/captures/{capture_id}/image`, their application services, the MinIO image adapter, and the RQ queue adapter. Production capture processing, OCR, analysis, and timeline routes are not implemented. POST uses multipart fields `image`, `device_id`, and `captured_at`; its default processing-queue dependency returns `503` until a real processor and RQ job target can be composed. GET metadata uses PostgreSQL only. GET image uses PostgreSQL and MinIO, without Redis or the worker. Authentication and owner scoping are not implemented, so do not expose these routes publicly.
 
 ## Start on Windows PowerShell
 
@@ -58,6 +58,10 @@ python -c "from server.storage.s3 import create_s3_client; print(create_s3_clien
 ```
 
 Stop Uvicorn and the worker with Ctrl+C. Stop containers while retaining data with `docker compose down`. To **delete all local PostgreSQL and MinIO data**, use `docker compose down -v` only when you intend to reset the environment. Redis has no persistent local volume.
+
+## Developer scripts and infrastructure verification
+
+The [developer scripts index](scripts/README.md) lists local utilities and detailed guides for MinIO image smoke testing and Redis/RQ queue testing and inspection. These scripts are for local verification and debugging, not production entrypoints.
 
 ## Project boundaries
 

@@ -3,14 +3,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from server.api.routes.captures import router as captures_router
+
 app = FastAPI(title="Screcaap")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173",
-                   "http://127.0.0.1:4173", "http://localhost:4173", "null"],
-    allow_methods=["GET"],
-    allow_headers=["Accept"],
-)
+app.include_router(captures_router)
 
 
 @app.get("/health")

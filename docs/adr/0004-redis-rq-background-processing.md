@@ -10,4 +10,4 @@ Use Redis + RQ as the MVP queue implementation. Background processing assumes at
 
 ## Consequences
 
-Local and deployed environments need Redis and a worker process. Exact duplicate-job handling, atomic claiming/concurrency, retry/backoff policy, failure recovery, job timeout, queue-specific delivery/recovery details, and consistency between persistence and enqueueing remain TODO. This decision does not introduce an event bus or event-sourcing architecture.
+Local and deployed environments need Redis and a worker process. Conditional PostgreSQL state updates now provide atomic claiming; a losing duplicate job skips processing. The claim is committed before processor work. Retry/backoff policy, stale processing recovery, job timeout, queue-specific delivery/recovery details, and consistency between persistence and enqueueing remain TODO. This decision does not introduce an event bus or event-sourcing architecture.

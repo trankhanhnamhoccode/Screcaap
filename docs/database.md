@@ -22,14 +22,14 @@
 - **DECIDED:** The domain `Capture.image_reference` is an opaque, nullable screenshot reference. Repositories map it to the existing `CaptureModel.image_object_key`/`captures.image_object_key` field; domain code does not depend on object-storage details.
 - **TODO:** Define result versioning and duplicate handling for repeated jobs before choosing uniqueness constraints.
 - **DECIDED:** If a capture collection endpoint is added, use cursor/keyset pagination ordered by `captured_at DESC, id DESC`, with `id` as the stable tie-breaker. The first schema includes `(device_id, captured_at DESC, id DESC)` and `devices(user_id)` indexes for this read path. Cursor encoding/wire format remains **TODO**.
-- **PROPOSED:** Use repository operations that atomically claim `pending` work and commit state/results to prevent duplicate processing. Transaction boundaries and unique constraints are **TODO** in the physical design.
+- **IMPLEMENTED:** Conditional repository updates atomically claim `pending -> processing` and finalize `processing -> completed/failed`; the caller controls commit and rollback. The worker commits the claim before processing and commits the final state afterward. Derived result persistence and its transaction design remain **TODO**.
 - **TODO:** Client upload deduplication/idempotency key and any uniqueness rule for captures from the same device/time. Do not assume timestamps are unique.
 
 ## Expected access patterns
 
 1. Create a capture and retrieve it by identity and owner.
 2. Read its state, image reference, OCR result, and analysis result for the capture endpoints.
-3. Load a capture/image for a worker, process it, and persist results and state; duplicate handling is TODO.
+3. Claim a pending capture for a worker, process it, and persist its final state. A losing claim skips captures already processing, completed, or failed. Loading image data and persisting derived results remain TODO.
 4. If a capture collection endpoint is added, list captures for an owner using cursor/keyset pagination ordered by `captured_at DESC, id DESC`; cursor encoding/wire format remains TODO.
 5. Read observations by user/device and time range to build segments; read a user's segments over a time range. Aggregation and pagination remain TODO.
 

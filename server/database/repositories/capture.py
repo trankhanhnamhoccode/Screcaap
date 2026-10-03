@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from server.database.models import CaptureModel
@@ -39,3 +40,23 @@ class SqlAlchemyCaptureRepository:
             updated_at=model.updated_at,
             image_reference=model.image_object_key,
         )
+
+    def claim_for_processing(self, capture_id: UUID) -> bool:
+        return self._transition(capture_id, ProcessingStatus.PENDING, ProcessingStatus.PROCESSING)
+
+    def complete_processing(self, capture_id: UUID) -> bool:
+        return self._transition(capture_id, ProcessingStatus.PROCESSING, ProcessingStatus.COMPLETED)
+
+    def fail_processing(self, capture_id: UUID) -> bool:
+        return self._transition(capture_id, ProcessingStatus.PROCESSING, ProcessingStatus.FAILED)
+
+    def _transition(
+        self, capture_id: UUID, from_status: ProcessingStatus, to_status: ProcessingStatus
+    ) -> bool:
+        result = self._session.execute(
+            update(CaptureModel)
+            .where(CaptureModel.id == capture_id)
+            .where(CaptureModel.processing_status == from_status.value)
+            .values(processing_status=to_status.value, updated_at=func.now())
+        )
+        return result.rowcount == 1

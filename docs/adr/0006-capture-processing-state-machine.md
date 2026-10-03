@@ -10,4 +10,4 @@ Use `pending`, `processing`, `completed`, and `failed`. The transitions are `pen
 
 ## Consequences
 
-Workers must claim work safely and avoid duplicate OCR, analysis, or timeline effects when jobs repeat. The exact retry API, stale `processing` recovery, failure representation, result versioning, and transaction/constraint design remain TODO.
+Workers use conditional updates to claim `pending` work atomically. A worker commits the claim before running its processor, then commits `completed` or `failed`. Jobs that find `processing`, `completed`, or `failed` skip processing. Missing captures surface an error. The exact retry API, stale `processing` recovery, completion persistence failure recovery, failure representation, result versioning, and derived-result transaction design remain TODO.

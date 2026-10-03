@@ -25,9 +25,17 @@ The React dashboard can also run in an Electron desktop host. See [ADR 0009](adr
 
 **DECIDED upload flow:** `Desktop Client -> POST /v1/captures -> persist metadata/image -> enqueue job -> 202 Accepted`. The response must not wait for OCR or analysis. The service coordinates persistence and enqueueing; the API route performs no storage or queue work itself.
 
+**IMPLEMENTED application intake flow:** `CaptureIntakeCommand(device_id, captured_at, image_bytes) -> look up Device -> ImageStorage.store -> add pending Capture -> commit -> ProcessingQueue.enqueue_capture_processing(capture_id) -> Capture`. The application owns commit/rollback through the caller-provided SQLAlchemy Session's transaction methods; repositories never commit. `ImageStorage` and `ProcessingQueue` are application ports, without storage or queue SDK types. MinIO implements the image port using opaque object keys; `RqProcessingQueue` implements the queue port using a capture ID string. `POST /v1/captures` parses multipart data and calls this service through request-scoped dependency injection. The production queue dependency returns `503` before intake until a real job target and processor pipeline exist; tests inject a fake queue. The production capture-processing worker is not implemented yet.
+
+**IMPLEMENTED capture read flow:** `GET /v1/captures/{capture_id} -> CaptureReadService -> CaptureRepository.get_by_id -> PostgreSQL`. It uses a read-only request-scoped session and returns persisted status through the same public schema as POST. The read does not use MinIO, Redis/RQ, or the worker. Owner-scoped authorization remains TODO.
+
+**IMPLEMENTED image read flow:** `GET /v1/captures/{capture_id}/image -> CaptureImageReadService -> CaptureRepository.get_by_id -> PostgreSQL; ImageStorage.read(image_reference) -> MinIO`. The service checks for a Capture and non-null image reference before reading bytes. The API returns raw bytes as `application/octet-stream`; original MIME metadata is not persisted. Redis/RQ, the worker, OCR, and semantic analysis do not participate. Owner-scoped authorization and broken-reference recovery remain TODO.
+
+If the device is missing, no image, capture, or job is created. Storage failure prevents capture persistence and enqueueing. A repository/add or commit failure triggers rollback and best-effort image removal while preserving the original error. Enqueue failure happens after commit: the pending Capture and image remain, and the service raises an error containing the committed capture ID. **TODO:** Recover pending captures whose enqueue failed; this MVP has no outbox, retry, or reconciliation mechanism.
+
 **DECIDED worker flow:** `job -> Capture -> OCRProvider -> ActivityAnalyzer -> persist results -> timeline aggregation`. The worker invokes application services. OCR output is distinct from semantic analysis. An `ActivitySegment` represents an interval inferred from observations; a `Capture` represents only one timestamp.
 
-**TODO:** Define the consistency mechanism between PostgreSQL, object storage, and job enqueueing, including recovery from partial intake and enqueue failure. No distributed transaction is assumed.
+**TODO:** Define a durable consistency/recovery mechanism between PostgreSQL, object storage, and job enqueueing. Best-effort image cleanup cannot guarantee orphan removal, and enqueue-after-commit does not guarantee that a pending capture has a queued job. No distributed transaction is assumed.
 
 ## Layers and dependency direction
 
@@ -53,7 +61,9 @@ The composition boundary wires concrete adapters to ports. `shared/schemas/` con
 
 **DECIDED:** Background processing assumes at-least-once delivery, so duplicate jobs are possible and processing jobs must be idempotent. Persisted state is authoritative, not queue delivery count.
 
-**TODO:** Define exact duplicate-job handling, atomic claiming/concurrency, retry/backoff, failure recovery, and queue-specific delivery/recovery details before implementing RQ jobs.
+**IMPLEMENTED worker orchestration foundation:** A worker service receives a Capture ID, atomically claims `pending -> processing`, and commits that claim before invoking the opaque `CaptureProcessor` port. The processor runs outside a database transaction. On success, the service commits `processing -> completed`; on a processing exception, it commits `processing -> failed` and surfaces the original error. A losing claim checks persisted state: `processing`, `completed`, and `failed` jobs skip processing; missing captures raise an error. Failed captures are not automatically retried. RQ delivery remains at least once, and the queue adapter still accepts an importable job target. No production target is wired until a real processor exists.
+
+**TODO:** Implement the production processing pipeline, `OCRProvider`, `ActivityAnalyzer`, and result persistence. Define RQ retry/backoff, stale `processing` recovery, explicit `failed -> pending` retry, completion persistence failure recovery, and queue-specific delivery/recovery details. No automatic recovery is implied by the current worker service.
 
 **DECIDED:** Timeline segments are inferred from multiple observations. A screenshot does not establish activity through the next screenshot timestamp. The aggregation algorithm, gap threshold, and treatment of low-confidence observations are **TODO**; [Proposal 0008](adr/0008-rule-based-timeline-aggregation.md) is one option.
 
