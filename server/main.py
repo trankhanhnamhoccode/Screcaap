@@ -1,6 +1,7 @@
 """FastAPI application bootstrap."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.routes.captures import router as captures_router
 
