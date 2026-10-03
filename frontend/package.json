@@ -1,0 +1,52 @@
+{
+  "name": "screcaap-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Screcaap desktop activity dashboard MVP",
+  "author": "Screcaap project",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "desktop": "npm run build && electron .",
+    "desktop:build": "npm run build && node scripts/package-desktop.cjs --win portable --x64",
+    "desktop:unpacked": "npm run build && node scripts/package-desktop.cjs --win --dir --x64"
+  },
+  "build": {
+    "appId": "org.screcaap.desktop",
+    "productName": "Screcaap",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/main.cjs",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Screcaap-${version}-Windows-${arch}.exe"
+    }
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "electron": "^44.5.1",
+    "electron-builder": "26.0.12",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}

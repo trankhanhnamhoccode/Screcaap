@@ -1,5 +1,7 @@
 # Backend architecture
 
+The React dashboard can also run in an Electron desktop host. See [ADR 0009](adr/0009-electron-desktop-dashboard.md). This frontend packaging does not change the backend architecture below or implement the Python capture client.
+
 ## Status and scope
 
 **DECIDED:** The MVP is a modular monolith with a background worker. The API and worker share one codebase and application/domain code, but run as separate runtime processes. This document describes the target architecture; the current repository is a scaffold, not a running backend.
