@@ -406,3 +406,40 @@ def test_http_intake_with_real_service_and_repositories(database_session: Sessio
     assert stored.image_object_key == "captures/integration-image"
     assert storage.stored == [b"image bytes"]
     assert queue.enqueued == [capture_id]
+
+
+def test_http_get_capture_with_real_read_service_and_repository(database_session: Session) -> None:
+    from fastapi.testclient import TestClient
+
+    from server.api.dependencies import get_session
+    from server.main import app
+
+    _, device = create_user_and_device(database_session)
+    captured_at = datetime(2026, 10, 3, 1, 23, 45, tzinfo=timezone.utc)
+    capture = CaptureModel(
+        device_id=device.id,
+        captured_at=captured_at,
+        processing_status=ProcessingStatus.PROCESSING,
+        image_object_key="private/integration-image",
+    )
+    database_session.add(capture)
+    database_session.commit()
+
+    app.dependency_overrides[get_session] = lambda: database_session
+    try:
+        with TestClient(app) as client:
+            found = client.get(f"/v1/captures/{capture.id}")
+            missing = client.get(f"/v1/captures/{uuid4()}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert found.status_code == 200
+    assert found.json()["id"] == str(capture.id)
+    assert found.json()["device_id"] == str(device.id)
+    assert found.json()["captured_at"] == "2026-10-03T01:23:45Z"
+    assert found.json()["processing_status"] == "processing"
+    assert set(found.json()) == {
+        "id", "device_id", "captured_at", "processing_status", "created_at", "updated_at"
+    }
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "capture_not_found"

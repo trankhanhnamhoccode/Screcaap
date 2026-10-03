@@ -8,9 +8,9 @@ This document fixes resource behavior and known semantics. **DECIDED** means agr
 - **DECIDED:** A capture is one observation at `captured_at`. Its state is `pending`, `processing`, `completed`, or `failed`; only the transitions in [the state-machine ADR](adr/0006-capture-processing-state-machine.md) are valid.
 - **DECIDED:** A successful upload returns `202 Accepted` only after capture metadata/image are persisted and a processing job is enqueued. It does not wait for OCR, analysis, or timeline aggregation.
 - **DECIDED:** If capture collections are exposed, use cursor/keyset pagination ordered by `captured_at DESC, id DESC`, with `id` as the stable tie-breaker. Cursor encoding/wire format remains **TODO**.
-- **TODO:** Authentication mechanism, principal/device enrollment, authorization responses, upload limits and allowed media types, client idempotency key, and rate limits. Identifier, timestamp, and error formats for endpoints other than POST intake remain undecided. Access to a user's screenshots and derived data must be owner scoped. Until authentication is decided, no endpoint should be treated as safe for public deployment.
+- **TODO:** Authentication mechanism, principal/device enrollment, authorization responses, upload limits and allowed media types, client idempotency key, and rate limits. Identifier, timestamp, and error formats for endpoints other than POST intake and GET by ID remain undecided. Access to a user's screenshots and derived data must be owner scoped. Until authentication is decided, no endpoint should be treated as safe for public deployment.
 
-The POST intake fields and known error bodies are specified below. Examples for other endpoints remain illustrative.
+The POST intake and GET by ID fields and known error bodies are specified below. Examples for other endpoints remain illustrative.
 
 ## `POST /v1/captures`
 
@@ -22,7 +22,7 @@ The POST intake fields and known error bodies are specified below. Examples for 
 - **Response:** `202 Accepted` with JSON fields `id`, `device_id`, `captured_at`, `processing_status`, `created_at`, and `updated_at`. State comes from the persisted application result, normally `pending`. The response does not expose an image reference, storage details, or a queue job ID. `Location` header policy remains **TODO**.
 - **Errors:** Unknown device: `404` with `device_not_found`. Enqueue failure after commit: `503` with `capture_enqueue_failed` and the committed `capture_id`. Storage or persistence failure: generic `500` without provider details. If production processing is not configured, the default dependency returns `503` with `capture_processing_unavailable` before intake.
 - **Known application error body:** `{"error":{"code":"capture_enqueue_failed","message":"Capture was stored but background processing could not be scheduled.","capture_id":"<UUID>"}}`. Missing-device and empty-image errors use the same `error` object without `capture_id`. FastAPI field validation retains its standard `detail` body; the pre-intake configuration `503` currently uses `{"detail":{"code":"capture_processing_unavailable"}}`.
-- **Asynchronous semantics:** `202` means the Capture was accepted for asynchronous processing and a job was requested; OCR and semantic analysis have not completed. Enqueue failure leaves the image and pending Capture stored. Blind retry may create another Capture because upload idempotency and recovery are **TODO**. The future `GET /v1/captures/{capture_id}` will expose state.
+- **Asynchronous semantics:** `202` means the Capture was accepted for asynchronous processing and a job was requested; OCR and semantic analysis have not completed. Enqueue failure leaves the image and pending Capture stored. Blind retry may create another Capture because upload idempotency and recovery are **TODO**. `GET /v1/captures/{capture_id}` exposes the current persisted state.
 
 Example exchange:
 
@@ -42,22 +42,22 @@ Content-Type: application/json
 
 ## `GET /v1/captures/{capture_id}`
 
-**Purpose:** Retrieve one capture's metadata and processing state.
+**Purpose:** Retrieve one Capture's persisted metadata and processing state without starting or changing processing.
 
-- **Authentication:** **TODO** mechanism; owner scoped.
-- **Request:** Capture identifier in path; no body. Identifier syntax is **TODO**.
-- **Validation:** Reject malformed identifiers; verify ownership. Exact malformed-ID status is **TODO**.
-- **Response:** `200 OK` with identity, observation timestamp, and one documented processing state. Other metadata and field names are **TODO**. This endpoint must not treat a screenshot as a period-long activity claim.
-- **Errors:** `404 Not Found` for an unknown capture; inaccessible-resource behavior (`403` versus `404`) and general error body are **TODO**. Authentication failure is **TODO**.
-- **Asynchronous semantics:** `pending` and `processing` are valid successful reads; `failed` is a persisted state, not a GET failure status.
+- **Authentication:** Not implemented. Owner-scoped authorization is **TODO**; possession of a Capture UUID must not grant access in the final product. Do not expose this endpoint publicly until access control exists.
+- **Request:** `capture_id` is a UUID path parameter; no body.
+- **Validation:** FastAPI rejects an invalid UUID with `422` and its standard validation body. Ownership validation is **TODO**.
+- **Response:** `200 OK` with the same public Capture schema as POST: `id`, `device_id`, `captured_at`, `processing_status`, `created_at`, and `updated_at`. The status is read from PostgreSQL and may be `pending`, `processing`, `completed`, or `failed`. Image references, storage keys, and queue information are excluded.
+- **Errors:** Unknown Capture: `404` with `{"error":{"code":"capture_not_found","message":"Capture was not found."}}`. Inaccessible-resource behavior (`403` versus `404`) and authentication failure remain **TODO**.
+- **Read semantics:** The request uses the read application service and repository only. It does not consult Redis/RQ or MinIO, enqueue work, or change the Capture. A single screenshot is not a period-long activity claim.
 
 ```http
-GET /v1/captures/<capture_id>
+GET /v1/captures/8c753daf-69fb-47b7-bc9a-97b4c8b48029
 
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"<id field TODO>": "<id>", "<captured_at field TODO>": "<timestamp>", "<state field TODO>": "processing"}
+{"id":"8c753daf-69fb-47b7-bc9a-97b4c8b48029","device_id":"<UUID>","captured_at":"2026-10-03T01:23:45+07:00","processing_status":"processing","created_at":"2026-10-02T18:23:46Z","updated_at":"2026-10-02T18:23:47Z"}
 ```
 
 ## `GET /v1/captures/{capture_id}/image`

@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime
 
-from server.api.dependencies import get_capture_service
+from server.api.dependencies import get_capture_read_service, get_capture_service
+from server.domain.entities import Capture
+from server.services.capture_read_service import CaptureNotFoundError, CaptureReadService
 from server.services.capture_service import (
     CaptureEnqueueError,
     CaptureIntakeCommand,
@@ -59,6 +61,26 @@ def create_capture(
             capture_id=exc.capture_id,
         )
 
+    return _capture_response(capture)
+
+
+@router.get(
+    "/{capture_id}",
+    response_model=CaptureAcceptedResponse,
+    responses={404: {"model": CaptureErrorResponse}},
+)
+def get_capture(
+    capture_id: UUID,
+    service: CaptureReadService = Depends(get_capture_read_service),
+) -> CaptureAcceptedResponse | JSONResponse:
+    try:
+        capture = service.get_capture(capture_id)
+    except CaptureNotFoundError:
+        return _error_response(404, "capture_not_found", "Capture was not found.")
+    return _capture_response(capture)
+
+
+def _capture_response(capture: Capture) -> CaptureAcceptedResponse:
     return CaptureAcceptedResponse(
         id=capture.id,
         device_id=capture.device_id,
