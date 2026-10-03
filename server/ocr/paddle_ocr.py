@@ -1,12 +1,14 @@
 """PP-OCRv5 infrastructure adapter. Paddle is imported only by the engine factory."""
 
+import importlib.util
 import json
 import math
 import os
 import tempfile
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Protocol
+from typing import Iterator, Protocol
 
 from server.domain.entities import OCRExtraction
 
@@ -133,11 +135,35 @@ class PaddleOCRProvider:
                 os.unlink(temporary_path)
 
 
+@contextmanager
+def isolate_optional_torch_from_modelscope() -> Iterator[None]:
+    """Hide unused Kaggle Torch only while importing the Paddle OCR runtime."""
+    original_find_spec = importlib.util.find_spec
+    original_use_torch = os.environ.get("USE_TORCH")
+
+    def find_spec_without_torch(name: str, package: str | None = None):
+        if name == "torch" or name.startswith("torch."):
+            return None
+        return original_find_spec(name, package)
+
+    os.environ["USE_TORCH"] = "0"
+    importlib.util.find_spec = find_spec_without_torch
+    try:
+        yield
+    finally:
+        importlib.util.find_spec = original_find_spec
+        if original_use_torch is None:
+            os.environ.pop("USE_TORCH", None)
+        else:
+            os.environ["USE_TORCH"] = original_use_torch
+
+
 def create_paddle_ocr_engine(device: str = "cpu") -> PaddleEngine:
     """Construct the research-baseline engine once per intended runtime owner."""
     if device not in {"cpu", "gpu:0"}:
         raise ValueError("OCR device must be 'cpu' or 'gpu:0'")
-    from paddleocr import PaddleOCR
+    with isolate_optional_torch_from_modelscope():
+        from paddleocr import PaddleOCR
 
     return PaddleOCR(
         ocr_version="PP-OCRv5",
