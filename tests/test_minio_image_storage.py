@@ -1,5 +1,6 @@
 """Integration checks against the configured local MinIO service."""
 
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -12,6 +13,20 @@ from botocore.exceptions import (
 
 from server.config import get_settings
 from server.storage.s3 import MinioImageStorage, create_s3_client
+
+
+def test_read_closes_s3_response_body_even_when_read_fails() -> None:
+    client = Mock()
+    body = Mock()
+    body.read.side_effect = OSError("stream interrupted")
+    client.get_object.return_value = {"Body": body}
+    storage = MinioImageStorage(client, "test-bucket")
+
+    with pytest.raises(OSError, match="stream interrupted"):
+        storage.read("test/object")
+
+    client.get_object.assert_called_once_with(Bucket="test-bucket", Key="test/object")
+    body.close.assert_called_once_with()
 
 
 def assert_object_missing(client, bucket: str, key: str) -> None:
@@ -58,6 +73,22 @@ def test_store_preserves_bytes_and_returns_opaque_key(minio_storage) -> None:
         assert response["Body"].read() == image_bytes
     finally:
         response["Body"].close()
+
+
+def test_store_then_read_returns_exact_bytes(minio_storage) -> None:
+    storage, _, _, created_keys = minio_storage
+    image_bytes = b"\x00\xff\x89PNG\r\n\x1a\n" + bytes(range(256))
+    key = storage.store(image_bytes)
+    created_keys.append(key)
+
+    assert storage.read(key) == image_bytes
+
+
+def test_read_missing_object_surfaces_storage_error(minio_storage) -> None:
+    storage, _, _, _ = minio_storage
+    with pytest.raises(ClientError) as caught:
+        storage.read(f"test/{uuid4().hex}")
+    assert caught.value.response["ResponseMetadata"]["HTTPStatusCode"] == 404
 
 
 def test_remove_deletes_created_object(minio_storage) -> None:
