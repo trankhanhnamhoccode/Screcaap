@@ -1,0 +1,35 @@
+---
+description: Evidence-first workflow for dependency and native-runtime conflicts in hosted OCR notebooks
+globs: research/ocr/**
+alwaysApply: false
+---
+
+# Hosted OCR Dependency Conflict Rulebook
+
+For Kaggle or another mutable hosted notebook, use this order:
+
+1. Capture the exact traceback, runtime image, Python/GPU details, installed metadata, and notebook revision.
+2. Reconstruct direct and transitive requirements from authoritative metadata; separate OCR dependencies from base-image noise.
+3. Classify the failure before changing anything:
+   - Layer A: dependency resolution.
+   - Layer B: Python import or framework initialization.
+   - Layer C: CUDA, driver, or native shared-library loading.
+   - Layer D: model initialization or inference.
+4. Stabilize one explicit compatibility set. Change the smallest justified component and never fix unrelated hosted-image warnings.
+5. If packages changed, stop and restart once. Make installation idempotent so Run All does not mutate the environment again.
+6. Smoke-test exact imports in a fresh subprocess before importing visualization libraries or initializing models. Preserve original stdout/stderr.
+7. If optional frameworks collide, isolate only the unused dependency and restore every temporary environment or import hook immediately.
+8. Verify native collisions from loaded shared libraries, not merely package versions or `sys.modules` names.
+9. Pin versions only after metadata and import smoke tests pass. Then run the complete model path before promotion.
+10. Record the tested matrix, revision, hardware, smoke result, inference evidence, and remaining uncertainty.
+
+Never hide the root traceback, patch `site-packages` casually, upgrade the whole environment, or claim GPU/model success from static validation.
+
+## Validated PP-OCRv5 incident
+
+- Revision: `2026-10-02-paddlex-3.7.2-r5`.
+- Kaggle: Python 3.12.13, two Tesla T4 GPUs, Paddle GPU 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2, PyYAML 6.0.2.
+- Conflict: PaddleX imported ModelScope; its optional Torch probe reached a broken `libtorch_cuda.so`/NCCL path although OCR did not need Torch.
+- Resolution: during ModelScope/PaddleX import only, set `USE_TORCH=0`, mask `find_spec("torch")`, restore both afterward, and assert `libtorch_cuda.so` stayed unloaded.
+- Evidence: fresh-process and current-kernel imports passed; Paddle detected CUDA and two GPUs; detector and Latin recognizer initialized; five GPU runs completed (p50 492.5 ms); 35 OCR blocks and `/kaggle/working/ocr_result.json` were produced.
+- Treat this as evidence for that Kaggle image, not a permanent compatibility guarantee. Re-run the smoke test whenever the image or any pinned package changes.

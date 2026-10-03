@@ -17,3 +17,5 @@ Examples:
 02_mobile_vs_server.ipynb
 03_vietnamese_english.ipynb
 ```
+
+For dependency, import, CUDA, or native-library failures in hosted OCR notebooks, follow the evidence-first [conflict rulebook](../../.cursor/rules/hosted-ocr-dependency-conflicts.mdc). Revalidate the complete compatibility set whenever the Kaggle image or a pinned package changes.
