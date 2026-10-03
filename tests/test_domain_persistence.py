@@ -1,4 +1,4 @@
-"""PostgreSQL integration checks for the first migration and repositories."""
+"""PostgreSQL integration checks for migrations and repositories."""
 
 from datetime import datetime, timezone
 from importlib import import_module
@@ -13,12 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from server.config import get_settings
-from server.database.models import CaptureModel, DeviceModel, UserModel
+from server.database.models import CaptureModel, DeviceModel, OCRResultModel, UserModel
 from server.database.repositories.capture import SqlAlchemyCaptureRepository
 from server.database.repositories.device import SqlAlchemyDeviceRepository
+from server.database.repositories.ocr_result import SqlAlchemyOCRResultRepository
 from server.database.repositories.user import SqlAlchemyUserRepository
 from server.database.session import Base
-from server.domain.entities import Capture, Device, User
+from server.domain.entities import Capture, Device, OCRResult, User
 from server.domain.enums import ProcessingStatus
 from server.services.capture_worker_service import CaptureWorkerService
 
@@ -28,8 +29,11 @@ def database_session():
     """Apply the real migration in a disposable PostgreSQL schema."""
     engine = create_engine(get_settings().database_url)
     schema = f"test_domain_{uuid4().hex}"
-    migration = import_module(
+    baseline_migration = import_module(
         "server.database.migrations.versions.0001_domain_persistence"
+    )
+    ocr_migration = import_module(
+        "server.database.migrations.versions.0002_ocr_results"
     )
 
     try:
@@ -40,7 +44,8 @@ def database_session():
             connection.commit()
 
             with Operations.context(MigrationContext.configure(connection)):
-                migration.upgrade()
+                baseline_migration.upgrade()
+                ocr_migration.upgrade()
             connection.commit()
 
             try:
@@ -49,9 +54,10 @@ def database_session():
                     session.rollback()
 
                 with Operations.context(MigrationContext.configure(connection)):
-                    migration.downgrade()
+                    ocr_migration.downgrade()
+                    baseline_migration.downgrade()
                 connection.commit()
-                assert not {"users", "devices", "captures"} & set(
+                assert not {"users", "devices", "captures", "ocr_results"} & set(
                     inspect(connection).get_table_names(schema=schema)
                 )
             finally:
@@ -70,6 +76,14 @@ def create_user_and_device(session: Session) -> tuple[UserModel, DeviceModel]:
     session.add(device)
     session.flush()
     return user, device
+
+
+def create_capture_for_ocr(session: Session) -> CaptureModel:
+    _, device = create_user_and_device(session)
+    capture = CaptureModel(device_id=device.id, captured_at=datetime.now(timezone.utc))
+    session.add(capture)
+    session.commit()
+    return capture
 
 
 def test_persist_user_device_and_capture(database_session: Session) -> None:
@@ -169,7 +183,7 @@ def test_migration_matches_orm_metadata(database_session: Session) -> None:
     schema = database_session.info["test_schema"]
     connection = database_session.connection()
     assert set(inspect(connection).get_table_names(schema=schema)) == {
-        "users", "devices", "captures"
+        "users", "devices", "captures", "ocr_results"
     }
 
     schema_metadata = MetaData(schema=schema)
@@ -481,3 +495,106 @@ def test_http_get_image_with_real_repository_and_fake_storage(database_session: 
     assert response.headers["content-type"] == "application/octet-stream"
     assert response.content == b"\x00\xffstored screenshot\x80"
     assert storage.read_references == ["captures/example"]
+
+
+def test_ocr_result_repository_preserves_unicode_multiline_text(database_session: Session) -> None:
+    capture = create_capture_for_ocr(database_session)
+    capture_id = capture.id
+    now = datetime.now(timezone.utc)
+    ocr_text = "Dòng một: học tập\nCửa sổ trình duyệt\nTiếng Việt 🇻🇳"
+    result = OCRResult(
+        id=uuid4(), capture_id=capture_id, text=ocr_text,
+        created_at=now, updated_at=now,
+    )
+    repository = SqlAlchemyOCRResultRepository(database_session)
+
+    repository.add(result)
+    database_session.commit()
+    database_session.expunge_all()
+
+    stored = repository.get_by_capture_id(capture_id)
+    assert stored == result
+    assert type(stored) is OCRResult
+    assert stored.text == ocr_text
+    model = database_session.get(OCRResultModel, result.id)
+    assert model is not None
+    assert model.text == ocr_text
+    assert model.created_at.tzinfo is not None
+    assert model.updated_at.tzinfo is not None
+
+
+def test_empty_ocr_text_is_valid_and_absent_result_is_distinct(database_session: Session) -> None:
+    capture = create_capture_for_ocr(database_session)
+    repository = SqlAlchemyOCRResultRepository(database_session)
+    assert repository.get_by_capture_id(capture.id) is None
+
+    now = datetime.now(timezone.utc)
+    repository.add(OCRResult(
+        id=uuid4(), capture_id=capture.id, text="",
+        created_at=now, updated_at=now,
+    ))
+    database_session.commit()
+
+    stored = repository.get_by_capture_id(capture.id)
+    assert stored is not None
+    assert stored.text == ""
+
+
+def test_ocr_result_capture_id_is_unique(database_session: Session) -> None:
+    capture = create_capture_for_ocr(database_session)
+    repository = SqlAlchemyOCRResultRepository(database_session)
+    now = datetime.now(timezone.utc)
+    repository.add(OCRResult(
+        id=uuid4(), capture_id=capture.id, text="first",
+        created_at=now, updated_at=now,
+    ))
+    database_session.commit()
+
+    with pytest.raises(IntegrityError), database_session.begin_nested():
+        repository.add(OCRResult(
+            id=uuid4(), capture_id=capture.id, text="second",
+            created_at=now, updated_at=now,
+        ))
+        database_session.flush()
+
+    assert repository.get_by_capture_id(capture.id).text == "first"
+
+
+def test_ocr_result_requires_existing_capture(database_session: Session) -> None:
+    now = datetime.now(timezone.utc)
+    with pytest.raises(IntegrityError), database_session.begin_nested():
+        SqlAlchemyOCRResultRepository(database_session).add(OCRResult(
+            id=uuid4(), capture_id=uuid4(), text="orphan",
+            created_at=now, updated_at=now,
+        ))
+        database_session.flush()
+
+
+def test_deleting_capture_cascades_to_ocr_result(database_session: Session) -> None:
+    capture = create_capture_for_ocr(database_session)
+    now = datetime.now(timezone.utc)
+    repository = SqlAlchemyOCRResultRepository(database_session)
+    repository.add(OCRResult(
+        id=uuid4(), capture_id=capture.id, text="visible text",
+        created_at=now, updated_at=now,
+    ))
+    database_session.commit()
+
+    database_session.execute(text("DELETE FROM captures WHERE id = :id"), {"id": capture.id})
+
+    assert repository.get_by_capture_id(capture.id) is None
+    assert database_session.execute(text("SELECT count(*) FROM ocr_results")).scalar_one() == 0
+
+
+def test_ocr_result_repository_does_not_commit(database_session: Session) -> None:
+    capture = create_capture_for_ocr(database_session)
+    now = datetime.now(timezone.utc)
+    repository = SqlAlchemyOCRResultRepository(database_session)
+    repository.add(OCRResult(
+        id=uuid4(), capture_id=capture.id, text="not committed",
+        created_at=now, updated_at=now,
+    ))
+    database_session.flush()
+    database_session.rollback()
+
+    assert repository.get_by_capture_id(capture.id) is None

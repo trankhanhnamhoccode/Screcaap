@@ -1,6 +1,7 @@
 """Infrastructure configuration loaded from the local environment."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = Field(min_length=1)
     minio_bucket: str = Field(min_length=1)
     minio_secure: bool = False
+    ocr_device: Literal["cpu", "gpu:0"] = "cpu"
 
 
 @lru_cache

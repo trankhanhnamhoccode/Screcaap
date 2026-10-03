@@ -48,3 +48,6 @@ class CaptureModel(Base):
     )
 
     device: Mapped["DeviceModel"] = relationship(back_populates="captures")
+    ocr_result: Mapped["OCRResultModel | None"] = relationship(
+        back_populates="capture", uselist=False, passive_deletes="all",
+    )

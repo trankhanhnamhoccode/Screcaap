@@ -1,6 +1,6 @@
 # Conceptual data model
 
-**DECIDED:** PostgreSQL is the system of record for metadata, processing state, derived results, and timeline segments. SQLAlchemy 2.x is the persistence mapper; Alembic manages schema migrations. The first physical schema covers users, devices, and captures; other concepts below remain conceptual. Screenshot bytes live in S3-compatible object storage; PostgreSQL holds an object key and necessary image metadata.
+**DECIDED:** PostgreSQL is the system of record for metadata, processing state, derived results, and timeline segments. SQLAlchemy 2.x is the persistence mapper; Alembic manages schema migrations. The physical schema covers users, devices, captures, and current OCR results; analysis results and activity segments remain conceptual. Screenshot bytes live in S3-compatible object storage; PostgreSQL holds an object key and necessary image metadata.
 
 ## Entities and ownership
 
@@ -9,7 +9,7 @@
 | `User` | Owns activity history and access to associated data. | One user has many devices and activity segments. |
 | `Device` | Source of captures; belongs to one user. | One device has many captures; each capture belongs to one device. |
 | `Capture` | One timestamped screenshot observation, with image reference and processing state. | One capture belongs to one device; its owner is derived through that device. |
-| `OCRResult` | Text extracted from one capture, without activity interpretation. | Belongs to one capture. The effective/current result is at most one per capture; history/versioning is TODO. |
+| `OCRResult` | Visible text extracted from one capture, without activity interpretation. An empty string means OCR succeeded with no recognized text. | One Capture has zero or one current OCRResult; history/versioning is TODO. |
 | `AnalysisResult` | Semantic interpretation of one capture's OCR text and context. | Belongs to one capture. The effective/current result is at most one per capture; history/versioning is TODO. |
 | `ActivitySegment` | An interval of related activity built from multiple observations. | Belongs to one user; may be associated with a device or multiple devices (TODO). Segment-to-capture linkage is TODO. |
 
@@ -20,7 +20,8 @@
 - **DECIDED:** A capture has an identity, `captured_at` timestamp, processing state, and image object reference/metadata. Its transitions are `pending -> processing`, `processing -> completed`, `processing -> failed`, and `failed -> pending` only through explicit retry. There is no implicit `completed -> processing` transition. See [the state-machine ADR](adr/0006-capture-processing-state-machine.md).
 - **DECIDED for the first schema:** `processing_status` is a constrained string with `pending`, `processing`, `completed`, and `failed`; new rows default to `pending`. Timestamps use timezone-aware PostgreSQL columns. `image_object_key` is nullable until ImageStorage intake semantics are defined; the schema does not yet require an image key for every capture. Other image metadata and its requiredness remain **TODO**.
 - **DECIDED:** The domain `Capture.image_reference` is an opaque, nullable screenshot reference. Repositories map it to the existing `CaptureModel.image_object_key`/`captures.image_object_key` field; domain code does not depend on object-storage details.
-- **TODO:** Define result versioning and duplicate handling for repeated jobs before choosing uniqueness constraints.
+- **IMPLEMENTED OCR result schema:** `ocr_results` has UUID `id`, non-null UUID `capture_id` referencing `captures.id`, non-null PostgreSQL `text`, and timezone-aware `created_at`/`updated_at`. `UNIQUE(capture_id)` enforces one current result; the unique constraint supports lookup by Capture ID without a separate index. The repository maps domain values explicitly and leaves commits to the caller. No blocks, confidence, polygons, provider metadata, or benchmark metrics are stored.
+- **TODO:** Define OCR result versioning and how a deliberate reprocessing attempt replaces or retains the current result. The current unique constraint prevents accidental duplicate rows but does not define an update/retry policy. Analysis result versioning and duplicate handling remain TODO.
 - **DECIDED:** If a capture collection endpoint is added, use cursor/keyset pagination ordered by `captured_at DESC, id DESC`, with `id` as the stable tie-breaker. The first schema includes `(device_id, captured_at DESC, id DESC)` and `devices(user_id)` indexes for this read path. Cursor encoding/wire format remains **TODO**.
 - **IMPLEMENTED:** Conditional repository updates atomically claim `pending -> processing` and finalize `processing -> completed/failed`; the caller controls commit and rollback. The worker commits the claim before processing and commits the final state afterward. Derived result persistence and its transaction design remain **TODO**.
 - **TODO:** Client upload deduplication/idempotency key and any uniqueness rule for captures from the same device/time. Do not assume timestamps are unique.
@@ -29,12 +30,13 @@
 
 1. Create a capture and retrieve it by identity and owner.
 2. Read its state, image reference, OCR result, and analysis result for the capture endpoints.
-3. Claim a pending capture for a worker, process it, and persist its final state. A losing claim skips captures already processing, completed, or failed. Loading image data and persisting derived results remain TODO.
-4. If a capture collection endpoint is added, list captures for an owner using cursor/keyset pagination ordered by `captured_at DESC, id DESC`; cursor encoding/wire format remains TODO.
-5. Read observations by user/device and time range to build segments; read a user's segments over a time range. Aggregation and pagination remain TODO.
+3. Claim a pending capture for a worker, process it, and persist its final state. A losing claim skips captures already processing, completed, or failed. Loading image data and invoking OCR in a real processor remain TODO; only OCR result persistence is implemented.
+4. Add and look up the current OCRResult by `capture_id` after successful OCR. No public text endpoint or processing orchestration exists yet.
+5. If a capture collection endpoint is added, list captures for an owner using cursor/keyset pagination ordered by `captured_at DESC, id DESC`; cursor encoding/wire format remains TODO.
+6. Read observations by user/device and time range to build segments; read a user's segments over a time range. Aggregation and pagination remain TODO.
 
 ## Lifecycle and deletion
 
-**DECIDED for the first schema:** Relational deletion cascades from `User -> Device -> Capture` through database foreign keys. This does not delete image objects.
+**DECIDED:** Relational deletion cascades from `User -> Device -> Capture -> OCRResult` through database foreign keys. This does not delete image objects.
 
-**TODO:** Define retention periods and deletion behavior for derived rows, activity segments, and object-storage images. Define orphan-object cleanup after partial intake, provider data handling, reprocessing/result-version history, and how segment provenance is stored.
+**TODO:** Define retention periods and deletion behavior for future analysis rows, activity segments, and object-storage images. Define orphan-object cleanup after partial intake, provider data handling, reprocessing/result-version history, and how segment provenance is stored.

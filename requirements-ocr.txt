@@ -1,0 +1,4 @@
+# Optional OCR runtime. Install a compatible paddlepaddle or paddlepaddle-gpu
+# distribution separately for the target CPU/CUDA environment.
+paddleocr==3.7.0
+paddlex[ocr-core]==3.7.2

@@ -15,4 +15,6 @@
 
 **IMPLEMENTED queue handoff and worker service:** `RqProcessingQueue` produces a job on `capture-processing` with one positional `capture_id` UUID string. The job target is injected by infrastructure composition; no production consumer is implemented yet. The application worker service accepts a UUID, commits an atomic claim before calling an opaque `CaptureProcessor`, then commits `completed` or `failed`. It surfaces processing errors after persisting `failed`. A production RQ callable and pipeline are deferred until the real processor can be composed.
 
+**IMPLEMENTED OCR foundation only:** `OCRProvider` has a bytes-to-text application contract, and the current OCRResult text can be persisted for one Capture. No production processor calls the provider or writes OCRResult yet, so no `capture.ocr.completed` event is produced by this foundation. The PaddleOCR adapter and semantic analysis remain TODO.
+
 **TODO:** Define whether these facts need persisted event records, their exact envelope, failure categorization, retry trigger/API, backoff, and publication consistency with PostgreSQL/object storage. No external event contract is established here.

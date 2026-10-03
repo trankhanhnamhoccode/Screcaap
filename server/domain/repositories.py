@@ -3,7 +3,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from server.domain.entities import Capture, Device, User
+from server.domain.entities import Capture, Device, OCRResult, User
 
 
 class UserRepository(Protocol):
@@ -28,3 +28,9 @@ class CaptureRepository(Protocol):
     def complete_processing(self, capture_id: UUID) -> bool: ...
 
     def fail_processing(self, capture_id: UUID) -> bool: ...
+
+
+class OCRResultRepository(Protocol):
+    def add(self, result: OCRResult) -> None: ...
+
+    def get_by_capture_id(self, capture_id: UUID) -> OCRResult | None: ...

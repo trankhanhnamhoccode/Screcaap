@@ -46,3 +46,25 @@ class Capture:
         _require_aware(self.captured_at, "captured_at")
         _require_aware(self.created_at, "created_at")
         _require_aware(self.updated_at, "updated_at")
+
+
+@dataclass(frozen=True)
+class OCRExtraction:
+    """Text produced by a successful OCR provider call, possibly empty."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class OCRResult:
+    """The current persisted OCR text for one Capture."""
+
+    id: UUID
+    capture_id: UUID
+    text: str
+    created_at: datetime
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_aware(self.created_at, "created_at")
+        _require_aware(self.updated_at, "updated_at")
