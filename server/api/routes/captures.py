@@ -3,12 +3,20 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import AwareDatetime
 
-from server.api.dependencies import get_capture_read_service, get_capture_service
+from server.api.dependencies import (
+    get_capture_image_read_service,
+    get_capture_read_service,
+    get_capture_service,
+)
 from server.domain.entities import Capture
 from server.services.capture_read_service import CaptureNotFoundError, CaptureReadService
+from server.services.capture_image_read_service import (
+    CaptureImageNotFoundError,
+    CaptureImageReadService,
+)
 from server.services.capture_service import (
     CaptureEnqueueError,
     CaptureIntakeCommand,
@@ -78,6 +86,33 @@ def get_capture(
     except CaptureNotFoundError:
         return _error_response(404, "capture_not_found", "Capture was not found.")
     return _capture_response(capture)
+
+
+@router.get(
+    "/{capture_id}/image",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "application/octet-stream": {
+                    "schema": {"type": "string", "format": "binary"}
+                }
+            }
+        },
+        404: {"model": CaptureErrorResponse},
+    },
+)
+def get_capture_image(
+    capture_id: UUID,
+    service: CaptureImageReadService = Depends(get_capture_image_read_service),
+) -> Response:
+    try:
+        image_bytes = service.get_image(capture_id)
+    except CaptureNotFoundError:
+        return _error_response(404, "capture_not_found", "Capture was not found.")
+    except CaptureImageNotFoundError:
+        return _error_response(404, "capture_image_not_found", "Capture image was not found.")
+    return Response(content=image_bytes, media_type="application/octet-stream")
 
 
 def _capture_response(capture: Capture) -> CaptureAcceptedResponse:

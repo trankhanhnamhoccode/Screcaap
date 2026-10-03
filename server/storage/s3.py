@@ -20,7 +20,7 @@ def create_s3_client() -> BaseClient:
 
 
 class MinioImageStorage:
-    """Store screenshot bytes under opaque keys in an existing bucket."""
+    """Store and read screenshot bytes under opaque keys in an existing bucket."""
 
     def __init__(
         self, client: BaseClient, bucket: str, key_prefix: str = "captures/"
@@ -38,6 +38,14 @@ class MinioImageStorage:
             ContentType="application/octet-stream",
         )
         return image_reference
+
+    def read(self, image_reference: str) -> bytes:
+        response = self._client.get_object(Bucket=self._bucket, Key=image_reference)
+        body = response["Body"]
+        try:
+            return body.read()
+        finally:
+            body.close()
 
     def remove(self, image_reference: str) -> None:
         # S3 deletion succeeds for an already missing key in an unversioned bucket.

@@ -4,7 +4,7 @@
 
 Install Python 3.11 or newer and Docker Desktop (or Docker Engine with the Compose plugin). PostgreSQL, Redis, and MinIO run in Docker; do not install those services separately on the host. Run the commands below from the repository root. The API and RQ worker run in a host Python virtual environment.
 
-This includes the `POST /v1/captures` HTTP intake route, `GET /v1/captures/{capture_id}` read route, their application services, the MinIO image adapter, and the RQ queue adapter. Production capture processing, OCR, analysis, and timeline routes are not implemented. POST uses multipart fields `image`, `device_id`, and `captured_at`; its default processing-queue dependency returns `503` until a real processor and RQ job target can be composed. GET uses PostgreSQL only and can be tested without MinIO or Redis. Authentication and owner scoping are not implemented, so do not expose these routes publicly.
+This includes `POST /v1/captures`, `GET /v1/captures/{capture_id}`, and `GET /v1/captures/{capture_id}/image`, their application services, the MinIO image adapter, and the RQ queue adapter. Production capture processing, OCR, analysis, and timeline routes are not implemented. POST uses multipart fields `image`, `device_id`, and `captured_at`; its default processing-queue dependency returns `503` until a real processor and RQ job target can be composed. GET metadata uses PostgreSQL only. GET image uses PostgreSQL and MinIO, without Redis or the worker. Authentication and owner scoping are not implemented, so do not expose these routes publicly.
 
 ## Start on Windows PowerShell
 

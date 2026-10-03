@@ -27,6 +27,8 @@
 
 **IMPLEMENTED capture read flow:** `GET /v1/captures/{capture_id} -> CaptureReadService -> CaptureRepository.get_by_id -> PostgreSQL`. It uses a read-only request-scoped session and returns persisted status through the same public schema as POST. The read does not use MinIO, Redis/RQ, or the worker. Owner-scoped authorization remains TODO.
 
+**IMPLEMENTED image read flow:** `GET /v1/captures/{capture_id}/image -> CaptureImageReadService -> CaptureRepository.get_by_id -> PostgreSQL; ImageStorage.read(image_reference) -> MinIO`. The service checks for a Capture and non-null image reference before reading bytes. The API returns raw bytes as `application/octet-stream`; original MIME metadata is not persisted. Redis/RQ, the worker, OCR, and semantic analysis do not participate. Owner-scoped authorization and broken-reference recovery remain TODO.
+
 If the device is missing, no image, capture, or job is created. Storage failure prevents capture persistence and enqueueing. A repository/add or commit failure triggers rollback and best-effort image removal while preserving the original error. Enqueue failure happens after commit: the pending Capture and image remain, and the service raises an error containing the committed capture ID. **TODO:** Recover pending captures whose enqueue failed; this MVP has no outbox, retry, or reconciliation mechanism.
 
 **DECIDED worker flow:** `job -> Capture -> OCRProvider -> ActivityAnalyzer -> persist results -> timeline aggregation`. The worker invokes application services. OCR output is distinct from semantic analysis. An `ActivitySegment` represents an interval inferred from observations; a `Capture` represents only one timestamp.

@@ -10,6 +10,7 @@ from server.database.repositories.capture import SqlAlchemyCaptureRepository
 from server.database.repositories.device import SqlAlchemyDeviceRepository
 from server.database.session import get_session_factory
 from server.services.capture_service import CaptureService
+from server.services.capture_image_read_service import CaptureImageReadService
 from server.services.capture_read_service import CaptureReadService
 from server.services.ports import ImageStorage, ProcessingQueue
 from server.storage.s3 import create_minio_image_storage
@@ -47,3 +48,10 @@ def get_capture_read_service(
     session: Annotated[Session, Depends(get_session)],
 ) -> CaptureReadService:
     return CaptureReadService(SqlAlchemyCaptureRepository(session))
+
+
+def get_capture_image_read_service(
+    session: Annotated[Session, Depends(get_session)],
+    image_storage: Annotated[ImageStorage, Depends(get_image_storage)],
+) -> CaptureImageReadService:
+    return CaptureImageReadService(SqlAlchemyCaptureRepository(session), image_storage)

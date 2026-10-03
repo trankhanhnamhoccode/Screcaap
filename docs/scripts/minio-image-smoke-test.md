@@ -18,7 +18,7 @@ The Compose service is named `minio`. Its health status should be `healthy`; its
 python -m pytest tests/test_minio_image_storage.py -q
 ```
 
-These tests use the real MinIO service and temporary `test/` object keys. Each test deletes only its own key. If MinIO is unreachable, they skip with a start command; if the configured bucket is missing, they report the bootstrap command.
+These tests use the real MinIO service and temporary `test/` object keys. They verify `store`, `read`, and `remove`, including exact byte round trips and missing-object behavior. Each test deletes only its own key. If MinIO is unreachable, they skip with a start command; if the configured bucket is missing, they report the bootstrap command.
 
 ## Manual image smoke test
 

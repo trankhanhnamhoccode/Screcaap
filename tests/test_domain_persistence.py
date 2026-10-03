@@ -443,3 +443,41 @@ def test_http_get_capture_with_real_read_service_and_repository(database_session
     }
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "capture_not_found"
+
+
+def test_http_get_image_with_real_repository_and_fake_storage(database_session: Session) -> None:
+    from fastapi.testclient import TestClient
+
+    from server.api.dependencies import get_image_storage, get_session
+    from server.main import app
+
+    _, device = create_user_and_device(database_session)
+    capture = CaptureModel(
+        device_id=device.id,
+        captured_at=datetime.now(timezone.utc),
+        image_object_key="captures/example",
+    )
+    database_session.add(capture)
+    database_session.commit()
+
+    class FakeStorage:
+        def __init__(self) -> None:
+            self.read_references: list[str] = []
+
+        def read(self, image_reference: str) -> bytes:
+            self.read_references.append(image_reference)
+            return b"\x00\xffstored screenshot\x80"
+
+    storage = FakeStorage()
+    app.dependency_overrides[get_session] = lambda: database_session
+    app.dependency_overrides[get_image_storage] = lambda: storage
+    try:
+        with TestClient(app) as client:
+            response = client.get(f"/v1/captures/{capture.id}/image")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert response.content == b"\x00\xffstored screenshot\x80"
+    assert storage.read_references == ["captures/example"]
